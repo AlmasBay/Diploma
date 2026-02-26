@@ -1,0 +1,63 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: diploma_db
+    environment:
+      POSTGRES_DB: newsapp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d newsapp"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  newsapp:
+    build:
+      context: ./newsapp
+      dockerfile: Dockerfile
+    container_name: diploma_newsapp
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/newsapp
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SERVER_PORT: 8080
+      APP_PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES: ${APP_PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES:-30}
+      APP_PASSWORD_RESET_FRONTEND_URL_TEMPLATE: ${APP_PASSWORD_RESET_FRONTEND_URL_TEMPLATE:-http://localhost:3000/reset-password?token={token}}
+      APP_PASSWORD_RESET_MAIL_FROM: ${APP_PASSWORD_RESET_MAIL_FROM:-no-reply@infohub.local}
+      APP_PASSWORD_RESET_MAIL_SUBJECT: ${APP_PASSWORD_RESET_MAIL_SUBJECT:-Password reset}
+      APP_PASSWORD_RESET_MAIL_ENABLED: ${APP_PASSWORD_RESET_MAIL_ENABLED:-false}
+      SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-}
+      SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-587}
+      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:-}
+      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
+      SPRING_MAIL_SMTP_AUTH: ${SPRING_MAIL_SMTP_AUTH:-true}
+      SPRING_MAIL_SMTP_STARTTLS_ENABLE: ${SPRING_MAIL_SMTP_STARTTLS_ENABLE:-true}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  infohub_web:
+    profiles: ["web"]
+    build:
+      context: ./infohub_app
+      dockerfile: Dockerfile
+      args:
+        API_BASE_URL: /api
+    container_name: diploma_infohub_web
+    depends_on:
+      - newsapp
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
